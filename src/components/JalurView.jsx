@@ -1,13 +1,20 @@
-import React, { useState, useMemo } from "react";
-import { Search, ChevronRight, Bus, Train, Compass, Filter, Clock, Check } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
+import { Search, ChevronRight, Bus, Train, Compass } from "lucide-react";
 import { localRoutes } from "../services/api";
 
 export default function JalurView({
   onSelectRoute = null,
-  activeRouteId = null
+  activeRouteId = null,
+  initialCategory = "all"
 }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory || "all");
+
+  useEffect(() => {
+    if (initialCategory) {
+      setSelectedCategory(initialCategory);
+    }
+  }, [initialCategory]);
 
   const categories = [
     { id: "all", label: "Semua" },
@@ -136,7 +143,7 @@ export default function JalurView({
                       <span>•</span>
                       <span>{route.stopCount} Halte</span>
                       <span>•</span>
-                      <span className="font-mono">{route.operatingHours.split(" ")[0]}</span>
+                       <span className="font-mono">{route.operatingHours || "Jadwal tidak tersedia"}</span>
                     </div>
                   </div>
                 </div>
@@ -145,9 +152,9 @@ export default function JalurView({
                 <div className="flex items-center gap-2 shrink-0 ml-2">
                   <div className="flex flex-col items-end">
                     <span className="font-mono text-xs font-semibold text-zinc-900">
-                      {route.fare === 0 ? "Gratis" : (typeof route.fare === "number" ? `Rp ${route.fare.toLocaleString("id-ID")}` : route.fare)}
+                      {route.fare === 0 ? "Gratis" : (typeof route.fare === "number" ? `Rp ${route.fare.toLocaleString("id-ID")}` : "Tarif tidak tersedia")}
                     </span>
-                    <span className="text-[10px] text-zinc-600">{route.headwayMinutes}</span>
+                    <span className="text-[10px] text-zinc-600">{route.headwayMinutes || "Headway tidak tersedia"}</span>
                   </div>
                   <ChevronRight className="size-4 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                 </div>

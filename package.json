@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "data:normalize": "node scripts/normalize-gtfs.cjs",
+    "test:data": "node scripts/validate-data.cjs",
+    "test:grouping": "node scripts/test-stop-grouping.cjs",
+    "test:ui-services": "node scripts/test-ui-services.cjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

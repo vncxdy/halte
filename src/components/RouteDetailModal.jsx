@@ -11,12 +11,19 @@ export default function RouteDetailModal({
   const [details, setDetails] = useState(null);
   const [direction, setDirection] = useState("outbound"); // 'outbound' | 'inbound'
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!routeId) return;
     setLoading(true);
+    setError(null);
     getRouteDetails(routeId).then((data) => {
       setDetails(data);
+      setLoading(false);
+      if (!data) setError("Detail rute tidak tersedia.");
+    }).catch(() => {
+      setDetails(null);
+      setError("Detail rute gagal dimuat.");
       setLoading(false);
     });
   }, [routeId]);
@@ -61,6 +68,10 @@ export default function RouteDetailModal({
             <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
               {route?.description || "Layanan transportasi publik Jakarta"}
             </p>
+            <p className="text-[10px] text-zinc-400 mt-1 font-mono">
+              Sumber: {route?.source || details?.source || "Transjakarta GTFS"}
+              {route?.sourceUpdatedAt ? ` · ${route.sourceUpdatedAt.slice(0, 10)}` : ""}
+            </p>
           </div>
 
           {/* Key Stats Bar */}
@@ -68,19 +79,19 @@ export default function RouteDetailModal({
             <div>
               <span className="text-[10px] font-mono text-zinc-400 block uppercase">TARIF</span>
               <span className="font-mono text-xs font-bold text-zinc-900">
-                {route?.fare === 0 ? "Gratis" : (typeof route?.fare === "number" ? `Rp ${route.fare.toLocaleString("id-ID")}` : "Rp 3.500")}
+                {route?.fare === 0 ? "Gratis" : (typeof route?.fare === "number" ? `Rp ${route.fare.toLocaleString("id-ID")}` : "Tidak tersedia")}
               </span>
             </div>
             <div>
               <span className="text-[10px] font-mono text-zinc-400 block uppercase">JAM LAYANAN</span>
               <span className="font-mono text-xs font-bold text-zinc-900">
-                {route?.operatingHours ? route.operatingHours.split(" ")[0] : "05:00 - 22:00"}
+                {route?.operatingHours || "Tidak tersedia"}
               </span>
             </div>
             <div>
               <span className="text-[10px] font-mono text-zinc-400 block uppercase">HEADWAY</span>
               <span className="font-mono text-xs font-bold text-zinc-900">
-                {route?.headwayMinutes || "5 - 10 mnt"}
+                {route?.headwayMinutes || "Tidak tersedia"}
               </span>
             </div>
           </div>
@@ -131,6 +142,8 @@ export default function RouteDetailModal({
 
             {loading ? (
               <div className="p-8 text-center text-xs text-zinc-400">Memuat rincian halte...</div>
+            ) : error ? (
+              <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-center text-xs text-red-700">{error}</div>
             ) : stops.length === 0 ? (
               <div className="p-4 bg-zinc-50 rounded-xl text-center text-xs text-zinc-500 italic">
                 Daftar halte untuk arah ini tidak tersedia.

@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
+import { Layers, Crosshair, Maximize2, Fullscreen, AlertTriangle } from "lucide-react";
 
 export default function MapView({
   center = [-6.1754, 106.8272],
@@ -15,41 +16,48 @@ export default function MapView({
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const tileLayerRef = useRef(null);
+  const vehicleMarkersRef = useRef(new Map()); // id -> L.marker
+  const [mapStyle, setMapStyle] = useState("openstreetmap");
+  const [tileError, setTileError] = useState(false);
+
   const layersRef = useRef({
+    routes: L.layerGroup(),
     stops: L.layerGroup(),
     vehicles: L.layerGroup(),
-    routes: L.layerGroup(),
     user: L.layerGroup()
   });
 
-  // Initialize Map
+  const getTileUrl = (style) => {
+    if (style === "openstreetmap") return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  };
+
+  // 1. Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current) return;
-    if (mapInstanceRef.current) return; // Prevent double initialization
+    if (mapInstanceRef.current) return;
 
     const map = L.map(mapContainerRef.current, {
       center,
       zoom,
       zoomControl: false,
-      attributionControl: false
+      attributionControl: true
     });
 
-    // CartoDB Positron tile layer (clean, high-contrast, minimalist)
-    const cartoApiKey = import.meta.env.VITE_CARTO_API_KEY || "";
-    const tileUrl = cartoApiKey
-      ? `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?api_key=${encodeURIComponent(cartoApiKey)}`
-      : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-
-    L.tileLayer(tileUrl, {
+    // Basemap Layer
+    const tileLayer = L.tileLayer(getTileUrl(mapStyle), {
       maxZoom: 19,
-      subdomains: "abcd",
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      attribution: "&copy; OpenStreetMap contributors"
     }).addTo(map);
+    tileLayer.on("tileerror", () => setTileError(true));
+    tileLayer.on("tileload", () => setTileError(false));
+    tileLayerRef.current = tileLayer;
 
-    // Zoom controls at bottom right
+    // Zoom control
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
-    // Add layer groups
+    // Add layer groups in order
     layersRef.current.routes.addTo(map);
     layersRef.current.stops.addTo(map);
     layersRef.current.vehicles.addTo(map);
@@ -57,29 +65,52 @@ export default function MapView({
 
     mapInstanceRef.current = map;
 
+    // Invalidate size immediately and after layout settle
+    map.invalidateSize();
+    const t1 = setTimeout(() => map.invalidateSize(), 150);
+    const t2 = setTimeout(() => map.invalidateSize(), 500);
+
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       map.remove();
       mapInstanceRef.current = null;
     };
   }, []);
 
-  // Update center when changed
+  // 2. Observe Container Resize to always keep map valid
   useEffect(() => {
-    if (!mapInstanceRef.current || !center) return;
-    mapInstanceRef.current.setView(center, zoom, { animate: true });
+    if (!mapContainerRef.current || !mapInstanceRef.current) return;
+    const ro = new ResizeObserver(() => {
+      mapInstanceRef.current?.invalidateSize();
+    });
+    ro.observe(mapContainerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // 3. Update Basemap Style
+  useEffect(() => {
+    if (!tileLayerRef.current) return;
+    tileLayerRef.current.setUrl(getTileUrl(mapStyle));
+  }, [mapStyle]);
+
+  // 4. Update Map Center & Zoom
+  useEffect(() => {
+    if (!mapInstanceRef.current || !center || center.length < 2) return;
+    mapInstanceRef.current.setView(center, zoom, { animate: true, duration: 0.8 });
   }, [center?.[0], center?.[1], zoom]);
 
-  // Render User Location
+  // 5. User Location Beacon
   useEffect(() => {
     const layer = layersRef.current.user;
     layer.clearLayers();
-    if (!userLocation) return;
+    if (!userLocation || !userLocation.lat || !userLocation.lon) return;
 
     const userIcon = L.divIcon({
-      className: "user-loc-icon",
+      className: "user-beacon",
       html: `
         <div class="relative flex items-center justify-center size-8">
-          <div class="absolute size-8 rounded-full bg-blue-500/20 animate-ping"></div>
+          <div class="absolute size-8 rounded-full bg-blue-500/25 animate-ping"></div>
           <div class="size-4 rounded-full bg-blue-600 border-2 border-white shadow-md"></div>
         </div>
       `,
@@ -92,7 +123,7 @@ export default function MapView({
       .addTo(layer);
   }, [userLocation]);
 
-  // Render Active Route Shape Polyline
+  // 6. Active Route Shape Polyline & Auto-Fit
   useEffect(() => {
     const layer = layersRef.current.routes;
     layer.clearLayers();
@@ -100,16 +131,16 @@ export default function MapView({
 
     const color = activeRoute?.color || "#D62126";
 
-    // Casing outline for crisp contrast
+    // Polyline shadow casing
     const polylineOutline = L.polyline(activeShape, {
       color: "#000000",
       weight: 6,
-      opacity: 0.15,
+      opacity: 0.18,
       lineCap: "round",
       lineJoin: "round"
     });
 
-    // Core route polyline
+    // Core colored polyline
     const polyline = L.polyline(activeShape, {
       color,
       weight: 4,
@@ -121,18 +152,15 @@ export default function MapView({
     layer.addLayer(polylineOutline);
     layer.addLayer(polyline);
 
-    // Fit map bounds to route
     try {
       const bounds = polyline.getBounds();
       if (bounds.isValid()) {
-        mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+        mapInstanceRef.current.fitBounds(bounds, { padding: [35, 35], maxZoom: 15 });
       }
-    } catch (e) {
-      // Ignore
-    }
+    } catch (e) {}
   }, [activeShape, activeRoute]);
 
-  // Render Stops
+  // 7. Route Stops
   useEffect(() => {
     const layer = layersRef.current.stops;
     layer.clearLayers();
@@ -143,14 +171,13 @@ export default function MapView({
 
       const isBRT = stop.isBRT || stop.type === "halte";
       const isRail = stop.mode === "mrt" || stop.mode === "lrt" || stop.mode === "krl";
-
-      const bgColor = isRail ? "#003882" : (isBRT ? "#D62126" : "#71717a");
+      const dotColor = isRail ? "#003882" : (isBRT ? (activeRoute?.color || "#D62126") : "#52525b");
 
       const icon = L.divIcon({
-        className: "stop-icon",
+        className: "stop-marker-icon",
         html: `
-          <div class="group flex items-center justify-center size-5 transition-transform hover:scale-125">
-            <div class="size-3 rounded-full border-2 border-white shadow-sm" style="background-color: ${bgColor}"></div>
+          <div class="flex items-center justify-center size-5 transition-transform hover:scale-135 cursor-pointer">
+            <div class="size-3 rounded-full border-2 border-white shadow-sm" style="background-color: ${dotColor}"></div>
           </div>
         `,
         iconSize: [20, 20],
@@ -159,21 +186,22 @@ export default function MapView({
 
       const marker = L.marker([stop.lat, stop.lon], { icon });
 
-      // Custom sleek popup
-      const routesBadges = (stop.routes || []).slice(0, 5).map(r => `
-        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium" style="background-color: ${r.color || '#e4e4e7'}; color: ${r.color ? '#fff' : '#18181b'}">
+      const routesBadges = (stop.routes || []).slice(0, 6).map(r => `
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold" style="background-color: ${r.color || '#e4e4e7'}; color: ${r.color ? '#fff' : '#18181b'}">
           ${r.code}
         </span>
       `).join(" ");
 
       marker.bindPopup(`
-        <div class="p-3 font-sans max-w-[220px]">
+        <div class="p-3 font-sans max-w-[240px]">
           <div class="flex items-center gap-1.5 mb-1">
-            <span class="size-2 rounded-full" style="background-color: ${bgColor}"></span>
-            <span class="text-[10px] font-mono uppercase tracking-wider text-zinc-500">${isRail ? stop.mode.toUpperCase() : (isBRT ? "Halte BRT" : "Bus Stop")}</span>
+            <span class="size-2 rounded-full" style="background-color: ${dotColor}"></span>
+            <span class="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold">
+              ${isRail ? stop.mode.toUpperCase() : (isBRT ? "Halte BRT" : "Bus Stop")}
+            </span>
           </div>
-          <h4 class="font-semibold text-sm text-zinc-900 leading-tight mb-1.5">${stop.name}</h4>
-          ${routesBadges ? `<div class="flex flex-wrap gap-1 mt-2">${routesBadges}</div>` : ""}
+          <h4 class="font-bold text-sm text-zinc-900 leading-tight mb-1">${stop.name}</h4>
+          ${routesBadges ? `<div class="flex flex-wrap gap-1 mt-2 pt-2 border-t border-zinc-100">${routesBadges}</div>` : ""}
         </div>
       `);
 
@@ -183,53 +211,154 @@ export default function MapView({
 
       layer.addLayer(marker);
     }
-  }, [stops, onStopClick]);
+  }, [stops, activeRoute, onStopClick]);
 
-  // Render Vehicles
+  // 8. Vehicles (Smooth Marker Updating without flickering)
   useEffect(() => {
     const layer = layersRef.current.vehicles;
-    layer.clearLayers();
-    if (!vehicles || vehicles.length === 0) return;
+    const markersMap = vehicleMarkersRef.current;
+    const currentIds = new Set();
 
     for (const v of vehicles) {
       if (!v.latitude || !v.longitude) continue;
+      currentIds.add(v.id);
 
       const bearing = v.bearing || 0;
       const routeColor = v.routeColor || "#0070BA";
 
-      const vehicleIcon = L.divIcon({
-        className: "vehicle-icon",
-        html: `
-          <div class="relative flex flex-col items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer group">
-            <!-- Route badge pill -->
-            <div class="px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold text-white shadow-md mb-0.5 transition-transform group-hover:scale-110 whitespace-nowrap" style="background-color: ${routeColor}">
-              ${v.routeCode}
-            </div>
-            <!-- Arrow vehicle pointer -->
-            <div class="size-6 rounded-full bg-white border border-zinc-200 shadow-md flex items-center justify-center transition-transform" style="transform: rotate(${bearing}deg);">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${routeColor}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="12 2 19 21 12 17 5 21 12 2"></polygon>
-              </svg>
-            </div>
+      const html = `
+        <div class="relative flex flex-col items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer group">
+          <div class="px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold text-white shadow-md mb-0.5 whitespace-nowrap transition-transform group-hover:scale-110" style="background-color: ${routeColor}">
+            ${v.routeCode}
           </div>
-        `,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
-      });
+          <div class="size-6 rounded-full bg-white border border-zinc-300 shadow-md flex items-center justify-center transition-transform" style="transform: rotate(${bearing}deg);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${routeColor}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 19 21 12 17 5 21 12 2"></polygon>
+            </svg>
+          </div>
+        </div>
+      `;
 
-      const marker = L.marker([v.latitude, v.longitude], { icon: vehicleIcon });
+      if (markersMap.has(v.id)) {
+        // Update existing marker smoothly
+        const marker = markersMap.get(v.id);
+        marker.setLatLng([v.latitude, v.longitude]);
+        const el = marker.getElement();
+        if (el) {
+          el.innerHTML = html;
+        }
+      } else {
+        // Create new marker
+        const vehicleIcon = L.divIcon({
+          className: "vehicle-custom-icon",
+          html,
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+        });
 
-      if (onVehicleClick) {
-        marker.on("click", () => onVehicleClick(v));
+        const marker = L.marker([v.latitude, v.longitude], { icon: vehicleIcon });
+        marker.on("click", () => {
+          if (onVehicleClick) onVehicleClick(v);
+        });
+
+        layer.addLayer(marker);
+        markersMap.set(v.id, marker);
       }
+    }
 
-      layer.addLayer(marker);
+    // Clean up markers that are no longer active
+    for (const [id, marker] of markersMap.entries()) {
+      if (!currentIds.has(id)) {
+        layer.removeLayer(marker);
+        markersMap.delete(id);
+      }
     }
   }, [vehicles, onVehicleClick]);
+
+  // Fit bounds helper button
+  const handleFitBounds = () => {
+    if (!mapInstanceRef.current) return;
+    if (activeShape && activeShape.length > 0) {
+      const bounds = L.polyline(activeShape).getBounds();
+      if (bounds.isValid()) {
+        mapInstanceRef.current.fitBounds(bounds, { padding: [35, 35] });
+      }
+    } else if (stops.length > 0) {
+      const group = L.featureGroup(stops.map(s => L.marker([s.lat, s.lon])));
+      mapInstanceRef.current.fitBounds(group.getBounds(), { padding: [35, 35] });
+    }
+  };
+
+  const handleCenterUser = () => {
+    if (userLocation && mapInstanceRef.current) {
+      mapInstanceRef.current.setView([userLocation.lat, userLocation.lon], 15, { animate: true });
+    }
+  };
+
+  const toggleBasemap = () => {
+    setMapStyle("openstreetmap");
+  };
+
+  const handleFullscreen = () => {
+    const container = mapContainerRef.current?.parentElement;
+    if (!container) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    } else {
+      container.requestFullscreen?.();
+    }
+    window.setTimeout(() => mapInstanceRef.current?.invalidateSize(), 250);
+  };
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
       <div ref={mapContainerRef} className="w-full h-full" />
+
+      {tileError && (
+        <div className="absolute left-3 bottom-3 z-30 max-w-xs rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2 text-[11px] text-amber-900 shadow-sm">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <span>Peta dasar gagal memuat. Periksa koneksi internet untuk melihat jalan dan nama tempat.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Map Utility Buttons */}
+      <div className="absolute top-3 right-3 z-30 flex flex-col gap-1.5">
+        <button
+          onClick={handleFitBounds}
+          title="Fokus Rute Lengkap"
+          className="size-8 rounded-lg bg-white/95 backdrop-blur-md border border-zinc-200/90 shadow-sm flex items-center justify-center text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 transition-colors"
+        >
+          <Maximize2 className="size-4" />
+        </button>
+
+        <button
+          onClick={handleFullscreen}
+          title="Layar penuh"
+          className="size-8 rounded-lg bg-white/95 backdrop-blur-md border border-zinc-200/90 shadow-sm flex items-center justify-center text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 transition-colors"
+        >
+          <Fullscreen className="size-4" />
+        </button>
+
+        {userLocation && (
+          <button
+            onClick={handleCenterUser}
+            title="Ke Lokasi Saya"
+            className="size-8 rounded-lg bg-white/95 backdrop-blur-md border border-zinc-200/90 shadow-sm flex items-center justify-center text-blue-600 hover:bg-zinc-100 transition-colors"
+          >
+            <Crosshair className="size-4" />
+          </button>
+        )}
+
+        <button
+          onClick={toggleBasemap}
+          title="Peta OpenStreetMap"
+          className="size-8 rounded-lg bg-white/95 backdrop-blur-md border border-zinc-200/90 shadow-sm flex items-center justify-center text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 transition-colors"
+        >
+          <Layers className="size-4" />
+        </button>
+      </div>
     </div>
   );
 }

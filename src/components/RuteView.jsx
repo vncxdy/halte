@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { ArrowUpDown, MapPin, Navigation, Clock, Shield, ChevronDown, ChevronUp, Footprints, Bus, AlertCircle } from "lucide-react";
 import { planJourney } from "../services/journeyPlanner";
 import { POPULAR_LOCATIONS, formatDistance } from "../services/geo";
@@ -6,6 +6,8 @@ import { localStops } from "../services/api";
 
 export default function RuteView({
   userLocation = null,
+  originOverride = null,
+  destinationOverride = null,
   onSelectStop = null
 }) {
   const [origin, setOrigin] = useState(POPULAR_LOCATIONS[1]); // Bundaran HI
@@ -16,6 +18,22 @@ export default function RuteView({
   const [isEditingOrigin, setIsEditingOrigin] = useState(false);
   const [isEditingDest, setIsEditingDest] = useState(false);
   const [expandedJourneyId, setExpandedJourneyId] = useState(null);
+
+  useEffect(() => {
+    if (originOverride) {
+      setOrigin(originOverride);
+      setOriginQuery("");
+      setIsEditingOrigin(false);
+    }
+  }, [originOverride]);
+
+  useEffect(() => {
+    if (destinationOverride) {
+      setDestination(destinationOverride);
+      setDestQuery("");
+      setIsEditingDest(false);
+    }
+  }, [destinationOverride]);
 
   // Swap origin and destination
   const handleSwap = () => {

@@ -2,11 +2,20 @@
 import localRoutes from "../data/routes.json";
 import localStops from "../data/stops.json";
 import localShapes from "../data/shapes.json";
-import corridorsData from "../data/corridors.json";
+import dataSources from "../data/dataSources.json";
 import { getDistanceKm } from "./geo";
+import { groupStops } from "./stopGrouping";
 
 const TIJE_BASE_URL = "/api/tj"; // Routed via Vite dev proxy
 const DIRECT_API_URL = "https://tijeapi.transjakarta.co.id/v1";
+
+export const supportedOperators = ["Transjakarta"];
+export const supportedModes = ["bus"];
+export const localStopGroups = groupStops(localStops);
+
+export function getDataSources() {
+  return dataSources;
+}
 
 let cachedToken = null;
 let tokenExpiry = 0;
@@ -183,7 +192,9 @@ export async function getRouteDetails(routeId) {
       headsign: found.inboundHeadsign || found.name.split("-")[0]?.trim() || "Keberangkatan Awal",
       stops: inboundStops
     },
-    facilities: ["accessible for all", "toilet", "praying area"]
+    facilities: [],
+    dataSource: found.source || "Transjakarta GTFS",
+    dataUpdatedAt: found.sourceUpdatedAt || null
   };
 }
 
@@ -268,6 +279,10 @@ export function getStopById(stopId) {
   return localStops.find(s => s.id === stopId || s.code === stopId);
 }
 
+export function getStopGroupById(groupId) {
+  return localStopGroups.find((group) => group.id === groupId || group.variants.some((stop) => stop.id === groupId));
+}
+
 /**
  * Search stops and routes
  */
@@ -276,20 +291,45 @@ export function searchTransportation(query) {
     return { routes: [], stops: [] };
   }
   const q = query.trim().toLowerCase();
+  const terms = q.split(/\s+/).filter(Boolean);
+  const score = (value) => {
+    const text = String(value || "").toLowerCase();
+    if (text === q) return 100;
+    if (text.startsWith(q)) return 70;
+    if (text.includes(q)) return 40;
+    return terms.every((term) => text.includes(term)) ? 20 : 0;
+  };
+  const routeScore = (route) => Math.max(
+    score(route.code), score(route.name), score(route.description),
+    score(route.operator), score(route.modeLabel), score(route.category)
+  );
+  const stopScore = (stop) => Math.max(
+    score(stop.name), score(stop.code), score(stop.operator), score(stop.mode),
+    ...(stop.routes || []).map((route) => Math.max(score(route.code), score(route.name)))
+  );
 
-  const matchingRoutes = localRoutes.filter(r =>
-    r.code.toLowerCase().includes(q) ||
-    r.name.toLowerCase().includes(q) ||
-    r.description.toLowerCase().includes(q) ||
-    (r.category && r.category.toLowerCase().includes(q))
-  ).slice(0, 10);
+  const matchingRoutes = localRoutes
+    .map((route) => ({ route, rank: routeScore(route) }))
+    .filter(({ rank }) => rank > 0)
+    .sort((a, b) => b.rank - a.rank)
+    .slice(0, 12)
+    .map(({ route }) => route);
 
-  const matchingStops = localStops.filter(s =>
-    s.name.toLowerCase().includes(q) ||
-    (s.code && s.code.toLowerCase().includes(q))
-  ).slice(0, 12);
+  const matchingStops = localStopGroups
+    .map((group) => ({
+      stop: group,
+      rank: Math.max(
+        stopScore(group),
+        ...group.variants.map((variant) => stopScore(variant)),
+        ...group.variants.map((variant) => score(variant.id))
+      )
+    }))
+    .filter(({ rank }) => rank > 0)
+    .sort((a, b) => b.rank - a.rank)
+    .slice(0, 12)
+    .map(({ stop }) => stop);
 
   return { routes: matchingRoutes, stops: matchingStops };
 }
 
-export { localRoutes, localStops, localShapes, corridorsData };
+export { localRoutes, localStops, localShapes, dataSources };

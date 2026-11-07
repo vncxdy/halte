@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { X, MapPin, Bus, Accessibility, Navigation, ArrowRight, ShieldCheck, Clock } from "lucide-react";
 import { formatDistance } from "../services/geo";
+import MapView from "./MapView";
 
 export default function StopDetailModal({
   stop = null,
@@ -8,11 +9,20 @@ export default function StopDetailModal({
   onSelectRoute = null,
   onSetOrigin = null,
   onSetDestination = null,
-  onTrackHere = null
+  onTrackHere = null,
+  isFavorite = false,
+  onToggleFavorite = null
 }) {
+  const [selectedVariantId, setSelectedVariantId] = useState(() => stop?.variants?.[0]?.id || stop?.id || null);
+  const variants = stop?.variants || (stop ? [stop] : []);
+  useEffect(() => {
+    setSelectedVariantId(variants[0]?.id || null);
+  }, [stop?.id]);
+
   if (!stop) return null;
 
-  const isRail = stop.mode === "mrt" || stop.mode === "lrt" || stop.mode === "krl";
+  const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) || variants[0];
+  const isRail = selectedVariant.mode === "mrt" || selectedVariant.mode === "lrt" || selectedVariant.mode === "krl";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
@@ -22,7 +32,7 @@ export default function StopDetailModal({
           <div className="flex items-center gap-2">
             <span className="size-2.5 rounded-full" style={{ backgroundColor: isRail ? "#003882" : (stop.isBRT ? "#D62126" : "#71717a") }} />
             <span className="text-xs font-mono font-semibold uppercase text-zinc-500">
-              {isRail ? stop.mode.toUpperCase() : (stop.isBRT ? "Halte BRT Transjakarta" : "Plang Bus Stop")}
+              {isRail ? selectedVariant.mode.toUpperCase() : (selectedVariant.isBRT ? "Halte BRT Transjakarta" : "Plang Bus Stop")}
             </span>
           </div>
           <button
@@ -40,8 +50,17 @@ export default function StopDetailModal({
             <h3 className="text-xl font-bold text-zinc-900 tracking-tight leading-tight">
               {stop.name}
             </h3>
+            {onToggleFavorite && (
+              <button
+                onClick={() => onToggleFavorite(selectedVariant)}
+                className={`mt-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${isFavorite ? "bg-red-50 text-red-700" : "bg-zinc-100 text-zinc-600"}`}
+              >
+                {isFavorite ? "Tersimpan di favorit" : "Simpan favorit"}
+              </button>
+            )}
             <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-500">
-              {stop.code && <span className="font-mono text-zinc-600 font-medium">Kode: {stop.code}</span>}
+              <span className="font-mono text-zinc-600 font-medium">ID: {selectedVariant.id}</span>
+              {selectedVariant.code && <span className="font-mono text-zinc-600 font-medium">Kode: {selectedVariant.code}</span>}
               {stop.distance != null && (
                 <>
                   <span>•</span>
@@ -55,7 +74,7 @@ export default function StopDetailModal({
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => {
-                if (onSetOrigin) onSetOrigin(stop);
+                if (onSetOrigin) onSetOrigin(selectedVariant);
                 if (onClose) onClose();
               }}
               className="px-3 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-xs font-semibold text-zinc-800 flex items-center justify-center gap-1.5 transition-colors"
@@ -65,7 +84,7 @@ export default function StopDetailModal({
             </button>
             <button
               onClick={() => {
-                if (onSetDestination) onSetDestination(stop);
+                if (onSetDestination) onSetDestination(selectedVariant);
                 if (onClose) onClose();
               }}
               className="px-3 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-xs font-semibold text-zinc-800 flex items-center justify-center gap-1.5 transition-colors"
@@ -73,6 +92,40 @@ export default function StopDetailModal({
               <Navigation className="size-3.5 text-red-600" />
               <span>Ke Sini (Tujuan)</span>
             </button>
+          </div>
+
+          {variants.length > 1 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 font-mono">VARIAN STOP ({variants.length})</h4>
+                <span className="text-[10px] text-zinc-400">Pilih titik spesifik</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {variants.map((variant) => (
+                  <button
+                    key={variant.id}
+                    onClick={() => setSelectedVariantId(variant.id)}
+                    className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition-colors ${selectedVariant.id === variant.id ? "border-zinc-900 bg-zinc-50" : "border-zinc-200 hover:bg-zinc-50"}`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-semibold text-zinc-900">{variant.name}</span>
+                      <span className="block font-mono text-[10px] text-zinc-500">{variant.id} · {variant.lat.toFixed(5)}, {variant.lon.toFixed(5)}</span>
+                    </span>
+                    <span className="ml-2 text-[10px] text-zinc-500">{variant.routes?.length || 0} rute</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="h-40 overflow-hidden rounded-xl border border-zinc-200">
+            <MapView
+              center={[selectedVariant.lat, selectedVariant.lon]}
+              zoom={16}
+              stops={variants}
+              className="h-full w-full"
+              onStopClick={(variant) => setSelectedVariantId(variant.id)}
+            />
           </div>
 
           {/* Serving Routes */}
@@ -84,13 +137,13 @@ export default function StopDetailModal({
               <span className="text-[11px] font-mono text-zinc-400">Klik rute</span>
             </div>
 
-            {(!stop.routes || stop.routes.length === 0) ? (
+          {(!selectedVariant.routes || selectedVariant.routes.length === 0) ? (
               <p className="text-xs text-zinc-500 italic p-3 bg-zinc-50 rounded-xl">
                 Tidak ada rute langsung yang terdata untuk plang halte ini.
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-1.5">
-                {stop.routes.map((r) => (
+                {selectedVariant.routes.map((r) => (
                   <div
                     key={r.id || r.code}
                     onClick={() => {
@@ -118,13 +171,13 @@ export default function StopDetailModal({
           </div>
 
           {/* Facilities */}
-          {stop.facilities && stop.facilities.length > 0 && (
+          {selectedVariant.facilities && selectedVariant.facilities.length > 0 && (
             <div className="flex flex-col gap-2 pt-2 border-t border-zinc-100">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 font-mono">
                 Fasilitas Halte
               </h4>
               <div className="flex flex-wrap gap-1.5">
-                {stop.facilities.map((f, i) => (
+                {selectedVariant.facilities.map((f, i) => (
                   <span
                     key={i}
                     className="px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-700 text-xs font-medium capitalize"
@@ -138,8 +191,8 @@ export default function StopDetailModal({
 
           {/* Location Coordinates */}
           <div className="pt-2 border-t border-zinc-100 flex items-center justify-between text-[11px] font-mono text-zinc-400">
-            <span>Koordinat GPS: {stop.lat?.toFixed(5)}, {stop.lon?.toFixed(5)}</span>
-            <span>Tarif: Rp 3.500 (Flat)</span>
+            <span>Koordinat GPS: {selectedVariant.lat?.toFixed(5)}, {selectedVariant.lon?.toFixed(5)}</span>
+            <span>Sumber: {selectedVariant.source || "Transjakarta GTFS"}</span>
           </div>
         </div>
       </div>

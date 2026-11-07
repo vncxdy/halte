@@ -48,7 +48,7 @@ export default function SearchModal({
                 saveRecent(query.trim());
               }
             }}
-            placeholder="Cari rute, nomor koridor, atau halte..."
+            placeholder="Cari rute, halte, operator, atau moda..."
             className="flex-1 bg-transparent py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-hidden"
           />
           {query ? (
@@ -185,7 +185,7 @@ export default function SearchModal({
                               {s.name}
                             </span>
                             <span className="text-[10px] text-zinc-400 uppercase font-mono">
-                              {s.isBRT ? "Halte BRT" : "Bus Stop"}
+                              {s.operator || "Transjakarta"} · {s.modeLabel || (s.isBRT ? "Halte BRT" : "Bus stop")}
                             </span>
                           </div>
                         </div>
