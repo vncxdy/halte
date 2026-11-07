@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Bus, Layers, LocateFixed, Route, Search, X } from "lucide-react";
+import { Bus, Layers, LocateFixed, Search, X } from "lucide-react";
 import MapView from "./MapView";
 import { localRoutes, localShapes, localStops } from "../services/api";
 import { getDistanceKm } from "../services/geo";
@@ -17,6 +17,16 @@ export default function MapHome({ userLocation, onLocateMe, isLocating, onSelect
     setVehicles(fleet);
     setMeta(nextMeta);
   }), []);
+
+  useEffect(() => {
+    const focus = (event) => {
+      const point = event.detail;
+      if (point?.lat == null || point?.lon == null) return;
+      window.dispatchEvent(new CustomEvent("halte:map-view", { detail: point }));
+    };
+    window.addEventListener("halte:focus", focus);
+    return () => window.removeEventListener("halte:focus", focus);
+  }, []);
 
   const center = userLocation ? [userLocation.lat, userLocation.lon] : [-6.1754, 106.8272];
   const route = localRoutes.find((item) => item.id === routeId);

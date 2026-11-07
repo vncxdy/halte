@@ -20,6 +20,7 @@ export default function MapView({
   const vehicleMarkersRef = useRef(new Map()); // id -> L.marker
   const [mapStyle, setMapStyle] = useState("openstreetmap");
   const [tileError, setTileError] = useState(false);
+  const [tileLoading, setTileLoading] = useState(true);
 
   const layersRef = useRef({
     routes: L.layerGroup(),
@@ -50,8 +51,9 @@ export default function MapView({
       maxZoom: 19,
       attribution: "&copy; OpenStreetMap contributors"
     }).addTo(map);
-    tileLayer.on("tileerror", () => setTileError(true));
-    tileLayer.on("tileload", () => setTileError(false));
+    tileLayer.on("loading", () => { setTileLoading(true); setTileError(false); });
+    tileLayer.on("load", () => { setTileLoading(false); setTileError(false); });
+    tileLayer.on("tileerror", () => { setTileLoading(false); setTileError(true); });
     tileLayerRef.current = tileLayer;
 
     // Zoom control
@@ -68,11 +70,17 @@ export default function MapView({
     // Invalidate size immediately and after layout settle
     map.invalidateSize();
     const t1 = setTimeout(() => map.invalidateSize(), 150);
-    const t2 = setTimeout(() => map.invalidateSize(), 500);
+    const t2 = setTimeout(() => map.invalidateSize({ pan: false }), 500);
+    const onResize = () => map.invalidateSize({ pan: false });
+    const onVisibility = () => { if (!document.hidden) window.setTimeout(onResize, 50); };
+    window.addEventListener("resize", onResize);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      window.removeEventListener("resize", onResize);
+      document.removeEventListener("visibilitychange", onVisibility);
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -80,12 +88,22 @@ export default function MapView({
 
   // 2. Observe Container Resize to always keep map valid
   useEffect(() => {
-    if (!mapContainerRef.current || !mapInstanceRef.current) return;
+    if (!mapContainerRef.current || !mapInstanceRef.current || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
       mapInstanceRef.current?.invalidateSize();
     });
     ro.observe(mapContainerRef.current);
     return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const handleFocus = (event) => {
+      const point = event.detail;
+      if (!mapInstanceRef.current || point?.lat == null || point?.lon == null) return;
+      mapInstanceRef.current.setView([point.lat, point.lon], Math.max(mapInstanceRef.current.getZoom(), 15), { animate: true });
+    };
+    window.addEventListener("halte:map-view", handleFocus);
+    return () => window.removeEventListener("halte:map-view", handleFocus);
   }, []);
 
   // 3. Update Basemap Style
@@ -311,8 +329,14 @@ export default function MapView({
   };
 
   return (
-    <div className={`relative overflow-hidden ${className}`}>
-      <div ref={mapContainerRef} className="w-full h-full" />
+    <div className={`relative min-h-[360px] overflow-hidden ${className}`}>
+      <div ref={mapContainerRef} className="absolute inset-0 h-full w-full" />
+
+      {tileLoading && !tileError && (
+        <div className="pointer-events-none absolute left-3 top-3 z-30 rounded-lg bg-white/90 px-3 py-2 text-[11px] text-zinc-600 shadow-sm backdrop-blur dark:bg-zinc-900/90 dark:text-zinc-300">
+          Memuat peta Jakarta…
+        </div>
+      )}
 
       {tileError && (
         <div className="absolute left-3 bottom-3 z-30 max-w-xs rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2 text-[11px] text-amber-900 shadow-sm">

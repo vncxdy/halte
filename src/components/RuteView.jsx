@@ -60,7 +60,7 @@ export default function RuteView({
   }, [destQuery]);
 
   return (
-    <div className="flex flex-col gap-4 pb-24 pt-3">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pb-24 pt-20 text-zinc-900 dark:text-zinc-100 sm:px-6 sm:pt-24">
       {/* Title */}
       <div>
         <h2 className="text-lg font-bold text-zinc-900 tracking-tight">Rencana Perjalanan</h2>
@@ -70,7 +70,7 @@ export default function RuteView({
       </div>
 
       {/* Origin & Destination Card */}
-      <div className="p-4 bg-white border border-zinc-200/90 rounded-2xl shadow-xs flex flex-col gap-3 relative">
+      <div className="relative flex flex-col gap-3 rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         {/* Origin Field */}
         <div className="flex items-center gap-3">
           <div className="size-3 rounded-full bg-emerald-500 shrink-0 ring-4 ring-emerald-100" />

@@ -53,7 +53,7 @@ export default function HalteView({
   }, [enrichedStops, filterType, filterFacility, query]);
 
   return (
-    <div className="flex flex-col gap-4 pb-24 pt-3">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-24 pt-20 text-zinc-900 dark:text-zinc-100 sm:px-6 sm:pt-24">
       {/* Title */}
       <div>
         <h2 className="text-lg font-bold text-zinc-900 tracking-tight">Direktori Halte Transjakarta</h2>
@@ -70,7 +70,7 @@ export default function HalteView({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Cari nama halte (cth: Monas, Harmoni, CSW, Senayan)..."
-          className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all"
+          className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 pl-9 pr-4 text-xs placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-hidden focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500 transition-all"
         />
         {query && (
           <button

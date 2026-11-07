@@ -6,7 +6,9 @@ export default function RouteDetailModal({
   routeId = null,
   onClose = null,
   onSelectStop = null,
-  onTrackRoute = null
+  onTrackRoute = null,
+  isFavorite = false,
+  onToggleFavorite = null
 }) {
   const [details, setDetails] = useState(null);
   const [direction, setDirection] = useState("outbound"); // 'outbound' | 'inbound'
@@ -36,9 +38,9 @@ export default function RouteDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl max-h-[85vh] overflow-y-auto flex flex-col shadow-2xl border border-zinc-200">
+      <div className="w-full max-w-lg bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-t-3xl sm:rounded-2xl max-h-[85vh] overflow-y-auto flex flex-col shadow-2xl border border-zinc-200 dark:border-zinc-800">
         {/* Header */}
-        <div className="sticky top-0 bg-white/95 backdrop-blur-md px-5 py-4 border-b border-zinc-100 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <span
               className="px-2 py-0.5 rounded text-xs font-mono font-bold text-white shadow-2xs"
@@ -72,6 +74,14 @@ export default function RouteDetailModal({
               Sumber: {route?.source || details?.source || "Transjakarta GTFS"}
               {route?.sourceUpdatedAt ? ` · ${route.sourceUpdatedAt.slice(0, 10)}` : ""}
             </p>
+            {onToggleFavorite && (
+              <button
+                onClick={() => onToggleFavorite(route)}
+                className={`mt-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${isFavorite ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"}`}
+              >
+                {isFavorite ? "Tersimpan di favorit" : "Simpan rute"}
+              </button>
+            )}
           </div>
 
           {/* Key Stats Bar */}

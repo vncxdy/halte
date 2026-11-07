@@ -34,9 +34,9 @@ export default function SearchModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="w-full max-w-lg bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[85vh]">
         {/* Search Header Input */}
-        <div className="p-3 border-b border-zinc-100 flex items-center gap-2">
+        <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
           <Search className="size-4 text-zinc-400 shrink-0 ml-1" />
           <input
             type="text"
@@ -49,7 +49,7 @@ export default function SearchModal({
               }
             }}
             placeholder="Cari rute, halte, operator, atau moda..."
-            className="flex-1 bg-transparent py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-hidden"
+            className="flex-1 bg-transparent py-1.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden"
           />
           {query ? (
             <button
